@@ -1,0 +1,9 @@
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/SpringbatchApplication.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/batch/BatchConfiguration.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/domain/ActivePersonRow.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/domain/CsvPersonRecord.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/domain/PersonKey.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/repository/PersonRecordRepository.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/service/CurrentFileState.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/service/ExecBatchRecorder.java
+/home/runner/work/springbatch/springbatch/src/main/java/com/willadalton/springbatch/service/JdbcExecBatchRecorder.java

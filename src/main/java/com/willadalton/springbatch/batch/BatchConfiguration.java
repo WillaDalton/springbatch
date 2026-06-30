@@ -17,7 +17,6 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.batch.repeat.RepeatStatus;
@@ -39,12 +38,14 @@ public class BatchConfiguration {
         DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
         tokenizer.setNames("personNumber", "nom", "prenom", "companyCode");
 
-        BeanWrapperFieldSetMapper<CsvPersonRecord> fieldSetMapper = new BeanWrapperFieldSetMapper<>();
-        fieldSetMapper.setTargetType(CsvPersonRecord.class);
-
         DefaultLineMapper<CsvPersonRecord> lineMapper = new DefaultLineMapper<>();
         lineMapper.setLineTokenizer(tokenizer);
-        lineMapper.setFieldSetMapper(fieldSetMapper);
+        lineMapper.setFieldSetMapper(fieldSet -> new CsvPersonRecord(
+                fieldSet.readString("personNumber"),
+                fieldSet.readString("nom"),
+                fieldSet.readString("prenom"),
+                fieldSet.readString("companyCode")
+        ));
 
         return new FlatFileItemReaderBuilder<CsvPersonRecord>()
                 .name("csvPersonReader")
