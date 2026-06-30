@@ -64,7 +64,7 @@ public class BatchConfiguration {
             String companyCode = normalize(item.companyCode());
 
             if (companyCode == null || companyCode.length() != 6) {
-                throw new IllegalArgumentException("Le code entreprise doit contenir exactement 6 caractères");
+                throw new IllegalArgumentException("Le code entreprise doit contenir exactement 6 caractères, reçu: " + companyCode);
             }
 
             return new CsvPersonRecord(personNumber, nom, prenom, companyCode);
@@ -145,6 +145,9 @@ public class BatchConfiguration {
                 .build();
     }
 
+    /**
+     * Supprime les espaces en début/fin et convertit une valeur vide en null.
+     */
     private String normalize(String value) {
         if (value == null) {
             return null;

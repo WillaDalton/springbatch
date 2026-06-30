@@ -15,7 +15,7 @@ Le batch enregistre également le résultat d'exécution dans la table `EXEC_BAT
 ## Lancer le build
 
 ```bash
-mvn clean verify
+mvn clean package
 ```
 
 ## Lancer le batch
