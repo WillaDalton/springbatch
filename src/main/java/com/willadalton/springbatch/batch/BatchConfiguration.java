@@ -64,7 +64,7 @@ public class BatchConfiguration {
             String companyCode = normalize(item.companyCode());
 
             if (companyCode == null || companyCode.length() != 6) {
-                throw new IllegalArgumentException("Le code entreprise doit contenir exactement 6 caracteres");
+                throw new IllegalArgumentException("Le code entreprise doit contenir exactement 6 caractères");
             }
 
             return new CsvPersonRecord(personNumber, nom, prenom, companyCode);

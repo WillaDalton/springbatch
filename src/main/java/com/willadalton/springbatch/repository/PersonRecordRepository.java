@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Date;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -71,14 +72,23 @@ public class PersonRecordRepository {
     }
 
     public void closeMissingActiveRows(Set<PersonKey> keysInFile, LocalDate exitDate) {
+        List<Long> idsToClose = new ArrayList<>();
         for (ActivePersonRow row : findActiveRows()) {
             if (!keysInFile.contains(row.key())) {
-                jdbcTemplate.update(
-                        "UPDATE PERSON_BATCH SET DATE_SORTIE = ? WHERE ID = ?",
-                        Date.valueOf(exitDate),
-                        row.id()
-                );
+                idsToClose.add(row.id());
             }
+        }
+
+        if (!idsToClose.isEmpty()) {
+            jdbcTemplate.batchUpdate(
+                    "UPDATE PERSON_BATCH SET DATE_SORTIE = ? WHERE ID = ?",
+                    idsToClose,
+                    idsToClose.size(),
+                    (ps, id) -> {
+                        ps.setDate(1, Date.valueOf(exitDate));
+                        ps.setLong(2, id);
+                    }
+            );
         }
     }
 }
