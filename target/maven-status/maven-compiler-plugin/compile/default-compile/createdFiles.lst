@@ -1,0 +1,10 @@
+com/willadalton/springbatch/domain/CsvPersonRecord.class
+com/willadalton/springbatch/service/ExecBatchRecorder.class
+com/willadalton/springbatch/domain/ActivePersonRow.class
+com/willadalton/springbatch/batch/BatchConfiguration$1.class
+com/willadalton/springbatch/batch/BatchConfiguration.class
+com/willadalton/springbatch/service/CurrentFileState.class
+com/willadalton/springbatch/service/JdbcExecBatchRecorder.class
+com/willadalton/springbatch/domain/PersonKey.class
+com/willadalton/springbatch/repository/PersonRecordRepository.class
+com/willadalton/springbatch/SpringbatchApplication.class
