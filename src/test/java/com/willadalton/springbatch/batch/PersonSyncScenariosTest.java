@@ -6,6 +6,7 @@ import com.willadalton.springbatch.service.CurrentFileState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.item.Chunk;
+import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.JdbcTest;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @JdbcTest
 @Import(PersonRecordRepository.class)
@@ -122,6 +124,51 @@ class PersonSyncScenariosTest {
         );
 
         assertThat(exitDate).isEqualTo(Date.valueOf(LocalDate.now()));
+    }
+
+    @Test
+    void shouldNotCreateDuplicateWhenSamePersonAppearsExactlyTwiceInFile() throws Exception {
+        writer.write(new Chunk<>(List.of(
+                new CsvPersonRecord("106", "PETIT", "FRANK", "ENT005"),
+                new CsvPersonRecord("106", "PETIT", "FRANK", "ENT005")
+        )));
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '106' AND CODE_ENTREPRISE = 'ENT005'",
+                Integer.class
+        );
+
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void shouldCreateNewRowWhenNameChangesForSamePersonNumberAndCompany() throws Exception {
+        insertRow("107", "ROUSSEAU", "GUY", "ENT006", LocalDate.of(2024, 5, 1), null);
+
+        writer.write(new Chunk<>(List.of(new CsvPersonRecord("107", "ROUSSEAU", "GUY-UPDATED", "ENT006"))));
+
+        Integer totalCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '107'", Integer.class);
+        Integer activeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '107' AND DATE_SORTIE IS NULL", Integer.class);
+
+        assertThat(totalCount).isEqualTo(2);
+        assertThat(activeCount).isEqualTo(2);
+    }
+
+    @Test
+    void shouldThrowWhenCompanyCodeLengthIsInvalid() {
+        ItemProcessor<CsvPersonRecord, CsvPersonRecord> processor = new BatchConfiguration().csvPersonProcessor();
+
+        assertThatThrownBy(() -> processor.process(new CsvPersonRecord("108", "LEROY", "HUGO", "ENT")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("6 caractères");
+
+        assertThatThrownBy(() -> processor.process(new CsvPersonRecord("108", "LEROY", "HUGO", "TOOLONG")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("6 caractères");
+
+        assertThatThrownBy(() -> processor.process(new CsvPersonRecord("108", "LEROY", "HUGO", null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("6 caractères");
     }
 
     private void insertRow(String personNumber, String nom, String prenom, String companyCode, LocalDate entryDate, LocalDate exitDate) {
