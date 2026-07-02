@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.willadalton.springbatch.batch.PersonSyncScenariosTest
+-------------------------------------------------------------------------------
+Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.132 s -- in com.willadalton.springbatch.batch.PersonSyncScenariosTest
