@@ -2,7 +2,6 @@ package com.willadalton.springbatch.batch;
 
 import com.willadalton.springbatch.domain.CsvPersonRecord;
 import com.willadalton.springbatch.repository.PersonRecordRepository;
-import com.willadalton.springbatch.service.CurrentFileState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.item.Chunk;
@@ -16,7 +15,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,19 +29,22 @@ class PersonSyncScenariosTest {
     @Autowired
     private PersonRecordRepository repository;
 
-    private ItemWriter<CsvPersonRecord> writer;
+    private ItemWriter<CsvPersonRecord> stagingWriter;
 
     @BeforeEach
     void setUp() {
+        jdbcTemplate.update("DELETE FROM PERSON_BATCH_STAGE");
         jdbcTemplate.update("DELETE FROM PERSON_BATCH");
-        writer = new BatchConfiguration().csvPersonWriter(repository, new CurrentFileState());
+        stagingWriter = new BatchConfiguration().stagingWriter(repository);
     }
 
     @Test
     void shouldCreateRowForNonExistingPerson() throws Exception {
         CsvPersonRecord record = new CsvPersonRecord("100", "DUPONT", "ALICE", "ENT001");
 
-        writer.write(new Chunk<>(List.of(record)));
+        stagingWriter.write(new Chunk<>(List.of(record)));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
+        repository.closeMissingActiveRowsFromStaging(LocalDate.now());
 
         Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH", Integer.class);
         Date entryDate = jdbcTemplate.queryForObject("SELECT DATE_ENTREE FROM PERSON_BATCH WHERE PERSON_NUMBER = '100'", Date.class);
@@ -58,7 +59,8 @@ class PersonSyncScenariosTest {
     void shouldNotCreateDuplicateWhenSameActivePersonAlreadyExists() throws Exception {
         insertRow("101", "DUPONT", "ALICE", "ENT001", LocalDate.of(2024, 1, 10), null);
 
-        writer.write(new Chunk<>(List.of(new CsvPersonRecord("101", "DUPONT", "ALICE", "ENT001"))));
+        stagingWriter.write(new Chunk<>(List.of(new CsvPersonRecord("101", "DUPONT", "ALICE", "ENT001"))));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
 
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '101' AND NOM = 'DUPONT' AND PRENOM = 'ALICE' AND CODE_ENTREPRISE = 'ENT001'",
@@ -72,7 +74,8 @@ class PersonSyncScenariosTest {
     void shouldCreateNewRowWhenActivePersonExistsInDifferentCompany() throws Exception {
         insertRow("102", "MARTIN", "BOB", "ENT001", LocalDate.of(2024, 2, 1), null);
 
-        writer.write(new Chunk<>(List.of(new CsvPersonRecord("102", "MARTIN", "BOB", "ENT002"))));
+        stagingWriter.write(new Chunk<>(List.of(new CsvPersonRecord("102", "MARTIN", "BOB", "ENT002"))));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
 
         Integer totalCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '102'", Integer.class);
         Integer activeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '102' AND DATE_SORTIE IS NULL", Integer.class);
@@ -85,10 +88,11 @@ class PersonSyncScenariosTest {
     void shouldHandleSamePersonTwiceInTwoCompaniesWhenOneActiveAlreadyExists() throws Exception {
         insertRow("103", "DURAND", "CHLOE", "ENT001", LocalDate.of(2024, 3, 1), null);
 
-        writer.write(new Chunk<>(List.of(
+        stagingWriter.write(new Chunk<>(List.of(
                 new CsvPersonRecord("103", "DURAND", "CHLOE", "ENT001"),
                 new CsvPersonRecord("103", "DURAND", "CHLOE", "ENT002")
         )));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
 
         Integer totalCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '103'", Integer.class);
         Integer company1Count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '103' AND CODE_ENTREPRISE = 'ENT001'", Integer.class);
@@ -103,7 +107,8 @@ class PersonSyncScenariosTest {
     void shouldCreateActiveRowWhenOnlyHistoricalRowExistsInSameCompany() throws Exception {
         insertRow("104", "MOREAU", "DAVID", "ENT003", LocalDate.of(2023, 1, 1), LocalDate.of(2024, 1, 1));
 
-        writer.write(new Chunk<>(List.of(new CsvPersonRecord("104", "MOREAU", "DAVID", "ENT003"))));
+        stagingWriter.write(new Chunk<>(List.of(new CsvPersonRecord("104", "MOREAU", "DAVID", "ENT003"))));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
 
         Integer totalCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '104'", Integer.class);
         Integer activeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '104' AND DATE_SORTIE IS NULL", Integer.class);
@@ -116,7 +121,7 @@ class PersonSyncScenariosTest {
     void shouldCloseActiveRowWhenPersonMissingFromFile() {
         insertRow("105", "BERNARD", "EMMA", "ENT004", LocalDate.of(2024, 4, 1), null);
 
-        repository.closeMissingActiveRows(Set.of(), LocalDate.now());
+        repository.closeMissingActiveRowsFromStaging(LocalDate.now());
 
         Date exitDate = jdbcTemplate.queryForObject(
                 "SELECT DATE_SORTIE FROM PERSON_BATCH WHERE PERSON_NUMBER = '105' AND CODE_ENTREPRISE = 'ENT004'",
@@ -128,10 +133,11 @@ class PersonSyncScenariosTest {
 
     @Test
     void shouldNotCreateDuplicateWhenSamePersonAppearsExactlyTwiceInFile() throws Exception {
-        writer.write(new Chunk<>(List.of(
+        stagingWriter.write(new Chunk<>(List.of(
                 new CsvPersonRecord("106", "PETIT", "FRANK", "ENT005"),
                 new CsvPersonRecord("106", "PETIT", "FRANK", "ENT005")
         )));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
 
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '106' AND CODE_ENTREPRISE = 'ENT005'",
@@ -145,7 +151,8 @@ class PersonSyncScenariosTest {
     void shouldCreateNewRowWhenNameChangesForSamePersonNumberAndCompany() throws Exception {
         insertRow("107", "ROUSSEAU", "GUY", "ENT006", LocalDate.of(2024, 5, 1), null);
 
-        writer.write(new Chunk<>(List.of(new CsvPersonRecord("107", "ROUSSEAU", "GUY-UPDATED", "ENT006"))));
+        stagingWriter.write(new Chunk<>(List.of(new CsvPersonRecord("107", "ROUSSEAU", "GUY-UPDATED", "ENT006"))));
+        repository.insertMissingActiveFromStaging(LocalDate.now());
 
         Integer totalCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '107'", Integer.class);
         Integer activeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PERSON_BATCH WHERE PERSON_NUMBER = '107' AND DATE_SORTIE IS NULL", Integer.class);

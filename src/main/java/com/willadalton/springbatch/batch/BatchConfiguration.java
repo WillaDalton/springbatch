@@ -1,9 +1,7 @@
 package com.willadalton.springbatch.batch;
 
 import com.willadalton.springbatch.domain.CsvPersonRecord;
-import com.willadalton.springbatch.domain.PersonKey;
 import com.willadalton.springbatch.repository.PersonRecordRepository;
-import com.willadalton.springbatch.service.CurrentFileState;
 import com.willadalton.springbatch.service.ExecBatchRecorder;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobExecution;
@@ -73,48 +71,41 @@ public class BatchConfiguration {
     }
 
     @Bean
-    public ItemWriter<CsvPersonRecord> csvPersonWriter(
-            PersonRecordRepository repository,
-            CurrentFileState currentFileState
-    ) {
+    public ItemWriter<CsvPersonRecord> stagingWriter(PersonRecordRepository repository) {
         return items -> {
-            LocalDate today = LocalDate.now();
             for (CsvPersonRecord item : items) {
-                PersonKey key = item.toKey();
-                currentFileState.add(key);
-                if (!repository.existsActive(key)) {
-                    repository.insert(item, today);
-                }
+                repository.insertIntoStaging(item);
             }
         };
     }
 
     @Bean
-    public Step importStep(
+    public Step stageImportStep(
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
             FlatFileItemReader<CsvPersonRecord> csvPersonReader,
             ItemProcessor<CsvPersonRecord, CsvPersonRecord> csvPersonProcessor,
-            ItemWriter<CsvPersonRecord> csvPersonWriter
+            ItemWriter<CsvPersonRecord> stagingWriter
     ) {
-        return new StepBuilder("importStep", jobRepository)
+        return new StepBuilder("stageImportStep", jobRepository)
                 .<CsvPersonRecord, CsvPersonRecord>chunk(100, transactionManager)
                 .reader(csvPersonReader)
                 .processor(csvPersonProcessor)
-                .writer(csvPersonWriter)
+                .writer(stagingWriter)
                 .build();
     }
 
     @Bean
-    public Step closeMissingStep(
+    public Step processStagingStep(
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            PersonRecordRepository repository,
-            CurrentFileState currentFileState
+            PersonRecordRepository repository
     ) {
-        return new StepBuilder("closeMissingStep", jobRepository)
+        return new StepBuilder("processStagingStep", jobRepository)
                 .tasklet((contribution, chunkContext) -> {
-                    repository.closeMissingActiveRows(currentFileState.snapshot(), LocalDate.now());
+                    LocalDate today = LocalDate.now();
+                    repository.insertMissingActiveFromStaging(today);
+                    repository.closeMissingActiveRowsFromStaging(today);
                     return RepeatStatus.FINISHED;
                 }, transactionManager)
                 .build();
@@ -123,9 +114,9 @@ public class BatchConfiguration {
     @Bean
     public Job personSyncJob(
             JobRepository jobRepository,
-            Step importStep,
-            Step closeMissingStep,
-            CurrentFileState currentFileState,
+            Step stageImportStep,
+            Step processStagingStep,
+            PersonRecordRepository repository,
             ExecBatchRecorder execBatchRecorder
     ) {
         return new JobBuilder("personSyncJob", jobRepository)
@@ -133,7 +124,7 @@ public class BatchConfiguration {
                 .listener(new JobExecutionListener() {
                     @Override
                     public void beforeJob(JobExecution jobExecution) {
-                        currentFileState.clear();
+                        repository.clearStaging();
                     }
 
                     @Override
@@ -141,14 +132,11 @@ public class BatchConfiguration {
                         execBatchRecorder.record(jobExecution.getId(), jobExecution.getStatus().name());
                     }
                 })
-                .start(importStep)
-                .next(closeMissingStep)
+                .start(stageImportStep)
+                .next(processStagingStep)
                 .build();
     }
 
-    /**
-     * Supprime les espaces en début/fin et convertit une valeur vide en null.
-     */
     private String normalize(String value) {
         if (value == null) {
             return null;
