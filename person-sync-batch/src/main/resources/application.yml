@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${APP_DATASOURCE_URL:jdbc:h2:mem:batchdb;DB_CLOSE_DELAY=-1}
+    username: ${APP_DATASOURCE_USERNAME:sa}
+    password: ${APP_DATASOURCE_PASSWORD:}
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false
+
+batch:
+  dataset-name: ${BATCH_DATASET_NAME:personnes}
+  input-file: classpath:/input/personnes.csv
