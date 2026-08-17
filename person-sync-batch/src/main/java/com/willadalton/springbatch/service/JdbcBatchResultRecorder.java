@@ -1,28 +1,26 @@
 package com.willadalton.springbatch.service;
 
 import com.willadalton.batchrunner.BatchResultRecorder;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.willadalton.springbatch.reporting.domain.ExecBatch;
+import com.willadalton.springbatch.reporting.repository.ExecBatchJpaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 
 @Service
 public class JdbcBatchResultRecorder implements BatchResultRecorder {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final ExecBatchJpaRepository execBatchJpaRepository;
 
-    public JdbcBatchResultRecorder(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public JdbcBatchResultRecorder(ExecBatchJpaRepository execBatchJpaRepository) {
+        this.execBatchJpaRepository = execBatchJpaRepository;
     }
 
     @Override
+    @Transactional("reportingTransactionManager")
     public void record(Long executionId, String status) {
-        jdbcTemplate.update(
-                "INSERT INTO EXEC_BATCH (EXECUTION_NUMBER, EXECUTION_DATE, STATUS) VALUES (?, ?, ?)",
-                executionId,
-                Timestamp.valueOf(LocalDateTime.now()),
-                status
-        );
+        execBatchJpaRepository.save(new ExecBatch(executionId, LocalDateTime.now(), status));
     }
 }
+
