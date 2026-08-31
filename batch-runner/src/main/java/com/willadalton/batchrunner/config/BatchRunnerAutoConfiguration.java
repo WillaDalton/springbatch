@@ -6,6 +6,8 @@ import com.willadalton.batchrunner.BatchResultRecorder;
 import com.willadalton.batchrunner.BatchRunner;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +22,7 @@ import java.util.List;
  * {@link BatchResultRecorder}) are present in the application context.
  */
 @Configuration
+@AutoConfigureAfter(BatchAutoConfiguration.class)
 @ConditionalOnBean({
         JobLauncher.class,
         BatchParametersProvider.class,
